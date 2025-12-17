@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: bloginfer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: dist-storage
+              mountPath: /usr/share/nginx/html
+              subPath: dist
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "512Mi"
+        - name: nginx-exporter
+          image: nginx/nginx-prometheus-exporter:latest
+          args:
+            - "-nginx.scrape-uri=http://localhost:8080/stub_status"
+          ports:
+            - containerPort: 9113
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: nginx-config
+        - name: dist-storage
+          persistentVolumeClaim:
+            claimName: blog-pvc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: bloginfer
+data:
+  nginx.conf: |
+    events {}
+    http {
+      include       /etc/nginx/mime.types;
+      default_type  application/octet-stream;
+
+      server {
+        listen 80;
+
+        # 前端静态文件，挂载在 /usr/share/nginx/html
+        # 请将 blog_website 构建后的静态资源放到 PVC 中的 frontend 目录
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Vue SPA 前端路由
+        location / {
+          try_files $uri /index.html;
+        }
+
+        # # 博客后端 API（C++ Drogon，blog-backend-service，端口 8080）
+        # # Drogon 中路由前缀已经是 /api/...
+        # #   例如：/api/posts, /api/login, /api/posts/{id}/comments
+        # # 前端推荐以相对路径 /api/... 访问，由 Nginx 反向代理到后端
+        # location /api/ {
+        #   proxy_pass http://blog-backend-service.bloginfer.svc.cluster.local:8080;
+        #   proxy_set_header Host $host;
+        #   proxy_set_header X-Real-IP $remote_addr;
+        #   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        #   proxy_set_header X-Forwarded-Proto $scheme;
+        # }
+
+        # 情感分析推理服务（Python 推理，Service: inference，端口 9000）
+        # 建议前端将 VITE_INFER_API 设置为 /api/infer
+        #   /api/infer/predict -> inference 服务的 /predict
+        location /api/infer/ {
+          proxy_pass http://inference.bloginfer.svc.cluster.local:9000/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+      }
+
+      # 给 nginx-exporter 用的 stub_status 端点，监听 8080
+      server {
+        listen 8080;
+
+        location /stub_status {
+          stub_status;
+          allow 127.0.0.1;
+          allow ::1;
+          deny all;
+        }
+      }
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: bloginfer
+spec:
+  type: NodePort # 如果你不要公网访问可改 ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+  selector:
+    app: nginx

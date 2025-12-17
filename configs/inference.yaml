@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference
+  namespace: bloginfer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference
+  template:
+    metadata:
+      labels:
+        app: inference
+    spec:
+      containers:
+        - name: inference
+          image: pytorch/pytorch:2.9.0-cuda13.0-cudnn9-runtime
+          command: ["bash", "-c"]
+          args:
+            - |
+              cd /app \
+              && chmod 777 ./inference/initenv.sh \
+              && ./inference/initenv.sh \
+              && python -u inference/infer.py
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - name: blog-storage
+              mountPath: /app
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "3"
+              memory: "6Gi"
+
+      volumes:
+        - name: blog-storage
+          persistentVolumeClaim:
+            claimName: blog-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference
+  namespace: bloginfer
+spec:
+  selector:
+    app: inference
+  ports:
+    - port: 9000
+      targetPort: 9000

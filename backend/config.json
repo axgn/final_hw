@@ -1,0 +1,34 @@
+{
+  "listeners": [
+    {
+      "address": "0.0.0.0",
+      "port": 8080
+    }
+  ],
+  "log": {
+    "log_path": "./logs",
+    "log_level": "INFO",
+    "logfile_base_name": "blog_backend"
+  },
+  "db_clients": [
+    {
+      "name": "default",
+      "rdbms": "mysql",
+      "host": "mysql",
+      "port": 3306,
+      "dbname": "blog",
+      "user": "root",
+      "password": "123456",
+      "is_fast": false,
+      "connection_number": 5
+    }
+  ],
+  "redis_clients": [
+    {
+      "name": "default",
+      "host": "redis-service",
+      "port": 6379,
+      "db": 0
+    }
+  ]
+}

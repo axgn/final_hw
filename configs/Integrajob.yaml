@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-aggregator
+  namespace: bloginfer
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      name: model-aggregator
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: aggregator
+          image: pytorch/pytorch:2.9.0-cuda13.0-cudnn9-runtime
+          command: ["bash", "-c"]
+          args:
+            - |
+              cd /blog \
+              && chmod 777 ./train/initenv.sh \
+              && ./train/initenv.sh \
+              && python -u train/argintegration.py
+          volumeMounts:
+            - name: blog-storage
+              mountPath: /blog
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+      volumes:
+        - name: blog-storage
+          persistentVolumeClaim:
+            claimName: blog-pvc

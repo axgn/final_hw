@@ -17,8 +17,7 @@ spec:
           args:
             - |
               cd /blog \
-              && chmod 777 ./train/initenv.sh \
-              && ./train/initenv.sh \
+              && pip install -r train/requirements.txt \
               && python -u train/argintegration.py
           volumeMounts:
             - name: blog-storage

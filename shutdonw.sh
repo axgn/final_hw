@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 kubectl delete -f configs/redis.yaml
 kubectl delete -f configs/blog.yaml
 kubectl delete -f configs/mysql.yaml

@@ -19,15 +19,14 @@ spec:
           command: ["bash", "-c"]
           args:
             - |
-              cd /app \
-              && chmod 777 ./inference/initenv.sh \
-              && ./inference/initenv.sh \
+              cd /blog \
+              && pip install -r inference/requirements.txt \
               && python -u inference/infer.py
           ports:
             - containerPort: 9000
           volumeMounts:
             - name: blog-storage
-              mountPath: /app
+              mountPath: /blog
           resources:
             requests:
               cpu: "1"

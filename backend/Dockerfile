@@ -3,6 +3,10 @@
 # Build stage: use official Drogon image with toolchain and headers
 FROM drogonframework/drogon:latest AS builder
 
+# MySQL and Redis IPs can be passed as build args, then exposed as envs
+ENV MYSQL_HOST=mysql
+ENV REDIS_HOST=redis
+
 WORKDIR /app
 
 # Copy backend source and config into the build image
@@ -18,13 +22,15 @@ RUN mkdir -p build \
 # Runtime stage: reuse Drogon base image to ensure all libs are present
 FROM drogonframework/drogon:latest
 
+# Re-declare build args and export them as runtime environment variables
+
 WORKDIR /app
 
 # Copy compiled binary from builder stage
 COPY --from=builder /app/build/blog_backend /app/build/blog_backend
 
-# Copy configuration and optional resources
-COPY config.json /app/config.json
+# Copy generated configuration and optional resources
+COPY --from=builder /app/build/config.json /app/config.json
 COPY sql /app/sql
 
 # Ensure logs/uploads directories exist (as used in config.json / app)

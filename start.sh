@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 kubectl create namespace bloginfer
 
 kubectl apply -f configs/pv_pvc.yaml
@@ -18,7 +20,7 @@ kubectl apply -f configs/mysql.yaml
 kubectl apply -f configs/inference.yaml
 kubectl apply -f configs/nginx.yaml
 
-kubectl get svc redis-service blog-backend-service
+kubectl get svc redis blog-backend-service
 sudo nerdctl -n k8s.io rmi -f my_repository/blog-backend:latest
 kubectl describe pod blog-backend-deployment-795765df44-d6vgx -n bloginfer
 

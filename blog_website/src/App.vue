@@ -23,6 +23,8 @@
         <MarkdownViewer v-if="currentPost" :source="currentPost.content" />
         <p v-else>请选择一篇文章。</p>
 
+        <CommentsSection v-if="currentPost" :post-id="currentPost.postId" />
+
         <section class="sentiment">
           <h2>情感分析小工具</h2>
           <textarea
@@ -49,6 +51,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import MarkdownViewer from './components/MarkdownViewer.vue'
+import CommentsSection from './components/CommentsSection.vue'
 import posts from './posts'
 
 const currentSlug = ref(posts[0]?.slug || '')

@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css'
+import 'highlight.js/styles/atom-one-dark.css'
 
 const props = defineProps({
   source: {
@@ -73,6 +73,7 @@ const rendered = computed(() => md.render(normalizedSource.value))
   max-width: 760px;
   line-height: 1.8;
   color: #111827;
+  font-size: 0.95rem;
 }
 
 .markdown h1,
@@ -85,8 +86,7 @@ const rendered = computed(() => md.render(normalizedSource.value))
 .markdown p {
   margin: 0.6rem 0;
 }
-
-.markdown code {
+.markdown :not(pre) > code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     'Liberation Mono', 'Courier New', monospace;
   background: #f3f4f6;
@@ -94,10 +94,11 @@ const rendered = computed(() => md.render(normalizedSource.value))
   border-radius: 3px;
 }
 
-.markdown pre code {
-  display: block;
-  padding: 0.75rem 1rem;
-  overflow-x: auto;
+.markdown pre {
+  margin: 1rem 0;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -12px rgba(15, 23, 42, 0.6);
 }
 
 .markdown a {

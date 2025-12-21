@@ -15,8 +15,7 @@
         您的浏览器不支持 video 标签。
       </video>
       <p class="video-tip">
-        当前示例视频地址为 <code>/videos/demo.mp4</code>，你可以将视频文件放在
-        <code>public/videos</code> 目录下并修改这里的路径。
+        在这里展示我的演示视频。
       </p>
     </div>
   </section>

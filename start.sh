@@ -10,7 +10,6 @@ kubectl apply -f configs/integrajob.yaml
 
 sudo buildkitd --oci-worker=false --containerd-worker=true
 
-cd backend && sudo nerdctl -n k8s.io build -t my_repository/blog-backend:latest .
 
 kubectl create configmap mysql-init --from-file=init.sql=configs/init.sql -n bloginfer
 

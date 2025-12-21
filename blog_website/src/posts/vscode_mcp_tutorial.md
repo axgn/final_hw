@@ -3,7 +3,6 @@
 在这篇文章里，我会先介绍一下mcp(Model Context Protocol)，并说一下我对mcp的理解，然后我会讲一下，如何使用在vscode中使用mcp，最后，我也会尝试着实现一个简单的mcp server。
 这里的mcp server的使用都是基于github copilot的agent模式的（ask模式不支持mcp），其他拓展我暂时还没有尝试过。学生可以通过github student pack免费使用github copilot。至于如何申请github student pack，可以参考这个博主写的[Github学生认证及学生包保姆级申请指南](https://zhuanlan.zhihu.com/p/578964972)，我后面看情况也可能会再写一篇，记住认证的时候一定要有2fa，不然认证不过。
 
-<!-- more -->
 
 ## MCP server介绍
 

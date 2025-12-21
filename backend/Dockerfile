@@ -27,7 +27,7 @@ FROM drogonframework/drogon:latest
 WORKDIR /app
 
 # Copy compiled binary from builder stage
-COPY --from=builder /app/build/blog_backend /app/build/blog_backend
+COPY --from=builder /app/build/blog_backend /app/blog_backend
 
 # Copy generated configuration and optional resources
 COPY --from=builder /app/build/config.json /app/config.json
@@ -40,7 +40,6 @@ RUN mkdir -p /app/logs /app/uploads
 EXPOSE 8080
 
 # Run from build directory so relative path ../config.json works
-WORKDIR /app/build
+WORKDIR /app
 
 CMD ["./blog_backend"]
-

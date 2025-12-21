@@ -20,9 +20,9 @@
       "problemMatcher": []
     },
     {
-      "label": "Start Web Module",
+      "label": "Start All Modules",
       "type": "shell",
-      "command": "./start_web_module.sh",
+      "command": "./start_all_module.sh",
       "group": {
         "kind": "build",
         "isDefault": false
@@ -38,7 +38,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Delete Web Module",
+      "label": "Delete ALL Modules",
       "type": "shell",
       "command": "./shutdown.sh",
       "group": {
@@ -63,6 +63,43 @@
         "kind": "build",
         "isDefault": false
       },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Restart Backend Module",
+      "type": "shell",
+      "command": "kubectl delete -f configs/blog.yaml && kubectl apply -f configs/blog.yaml",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Restart Frontend Module",
+      "type": "shell",
+      "command": "kubectl delete -f configs/nginx.yaml && kubectl apply -f configs/nginx.yaml",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "dependsOn": ["Build vue project"],
       "presentation": {
         "echo": true,
         "reveal": "always",

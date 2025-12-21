@@ -2,9 +2,27 @@
   <div class="app">
     <header class="app-header">
       <h1>我的 Markdown 博客</h1>
+      <nav class="app-nav">
+        <button
+          type="button"
+          class="app-nav-btn"
+          :class="{ active: activePage === 'blog' }"
+          @click="activePage = 'blog'"
+        >
+          博客
+        </button>
+        <button
+          type="button"
+          class="app-nav-btn"
+          :class="{ active: activePage === 'video' }"
+          @click="activePage = 'video'"
+        >
+          视频
+        </button>
+      </nav>
     </header>
 
-    <main class="app-main">
+    <main v-if="activePage === 'blog'" class="app-main">
       <section class="sidebar">
         <h2>文章列表</h2>
         <ul>
@@ -45,6 +63,12 @@
         </section>
       </section>
     </main>
+
+    <main v-else class="app-main single-column">
+      <section class="content">
+        <VideoPlayer />
+      </section>
+    </main>
   </div>
 </template>
 
@@ -52,9 +76,12 @@
 import { ref, computed } from 'vue'
 import MarkdownViewer from './components/MarkdownViewer.vue'
 import CommentsSection from './components/CommentsSection.vue'
+import VideoPlayer from './components/VideoPlayer.vue'
 import posts from './posts'
 
 const currentSlug = ref(posts[0]?.slug || '')
+
+const activePage = ref('blog')
 
 const currentPost = computed(() =>
   posts.find((p) => p.slug === currentSlug.value) || null,
@@ -139,6 +166,31 @@ async function analyze() {
   letter-spacing: 0.03em;
 }
 
+.app-nav {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(15, 23, 42, 0.85);
+  padding: 2px;
+  border-radius: 999px;
+}
+
+.app-nav-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  background: transparent;
+  color: #9ca3af;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.app-nav-btn.active {
+  background: linear-gradient(90deg, #2563eb, #4f46e5);
+  color: #f9fafb;
+  transform: translateY(-0.5px);
+}
+
 .app-main {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -150,6 +202,10 @@ async function analyze() {
   background: rgba(15, 23, 42, 0.98);
   box-shadow: 0 30px 60px -24px rgba(15, 23, 42, 0.95);
   overflow: hidden;
+}
+
+.app-main.single-column {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .sidebar {

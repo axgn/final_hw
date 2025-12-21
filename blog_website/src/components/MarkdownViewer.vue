@@ -5,6 +5,8 @@
 <script setup>
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
 
 const props = defineProps({
   source: {
@@ -17,6 +19,25 @@ const md = new MarkdownIt({
   html: false,
   linkify: true,
   breaks: true,
+})
+
+md.set({
+  highlight(code, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        const result = hljs.highlight(code, {
+          language: lang,
+          ignoreIllegals: true,
+        })
+        return `<pre class="hljs"><code>${result.value}</code></pre>`
+      } catch (e) {
+        // fall through to plain text escape
+      }
+    }
+
+    const escaped = md.utils.escapeHtml(code)
+    return `<pre class="hljs"><code>${escaped}</code></pre>`
+  },
 })
 
 function normalizeImagePaths(text) {

@@ -72,7 +72,7 @@ const rendered = computed(() => md.render(normalizedSource.value))
 .markdown {
   max-width: 760px;
   line-height: 1.8;
-  color: #111827;
+  color: #e5e7eb;
   font-size: 0.95rem;
 }
 
@@ -101,7 +101,20 @@ const rendered = computed(() => md.render(normalizedSource.value))
   box-shadow: 0 10px 25px -12px rgba(15, 23, 42, 0.6);
 }
 
+.markdown pre code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .markdown a {
-  color: #2563eb;
+  color: #93c5fd;
+}
+
+.markdown img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+  margin: 0.75rem auto;
 }
 </style>

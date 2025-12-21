@@ -426,7 +426,7 @@ watch(
 .comments {
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(55, 65, 81, 0.9);
   max-width: 760px;
 }
 
@@ -437,17 +437,17 @@ watch(
 }
 
 .comments-status {
-  color: #6b7280;
+  color: #9ca3af;
   font-size: 0.9rem;
 }
 
 .comments-error {
-  color: #b91c1c;
+  color: #fecaca;
   font-size: 0.9rem;
 }
 
 .comments-empty {
-  color: #6b7280;
+  color: #9ca3af;
   font-size: 0.9rem;
 }
 
@@ -489,18 +489,18 @@ watch(
 
 .comment-username {
   font-size: 0.95rem;
-  color: #111827;
+  color: #e5e7eb;
 }
 
 .comment-time {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .comment-content {
   margin: 0.25rem 0 0;
   font-size: 0.95rem;
-  color: #111827;
+  color: #e5e7eb;
 }
 
 .comment-delete {
@@ -546,9 +546,11 @@ watch(
   min-height: 80px;
   padding: 0.6rem 0.8rem;
   border-radius: 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid rgba(75, 85, 99, 0.9);
   font-family: inherit;
   resize: vertical;
+  background: rgba(15, 23, 42, 0.95);
+  color: #e5e7eb;
 }
 
 .comment-actions {

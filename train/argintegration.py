@@ -217,8 +217,9 @@ if __name__ == "__main__":
         model_dir = "./models"
     all_files = os.listdir(model_dir) if os.path.isdir(model_dir) else []
 
-    # 2. 优先从 Redis 中读取待聚合的客户端模型列表
+    # 2. Redis 用于记录“已聚合过的客户端模型”，避免重复参与后续聚合
     redis_client = None
+    processed_set = set()
     param_file_paths = []
     try:
         # 同样兼容 REDIS_PORT 为 tcp://host:port 的形式
@@ -248,7 +249,7 @@ if __name__ == "__main__":
                 )
 
         redis_db = int(os.getenv("REDIS_DB", "0"))
-        redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:pending_models")
+        redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:processed_models")
 
         redis_client = redis.Redis(
             host=redis_host,
@@ -256,31 +257,21 @@ if __name__ == "__main__":
             db=redis_db,
             decode_responses=True,
         )
-        pending = list(redis_client.smembers(redis_key))
-        print(f"从 Redis 读取到 {len(pending)} 个待聚合客户端模型: {pending}", flush=True)
-
-        # 仅保留存在于 models 目录下的、符合命名规则的文件
-        param_file_paths = [
-            f
-            for f in pending
-            if f in all_files
-            and (f.endswith(".pt") or f.endswith(".pth"))
-            and f.startswith("client_")
-        ]
-        missing = set(pending) - set(param_file_paths)
-        if missing:
-            print(f"警告：Redis 中的以下模型文件在磁盘上不存在，将被忽略: {list(missing)}", flush=True)
+        processed = list(redis_client.smembers(redis_key))
+        processed_set = set(processed)
+        print(f"从 Redis 读取到 {len(processed)} 个已聚合客户端模型(将跳过): {processed}", flush=True)
     except Exception as e:
-        print(f"连接或读取 Redis 失败，将回退到目录扫描: {e}", flush=True)
+        print(f"连接或读取 Redis 失败，将视为暂无已聚合记录: {e}", flush=True)
         redis_client = None
 
-    # 兼容旧逻辑：如果 Redis 中没有有效条目，则回退到扫描目录
-    if not param_file_paths:
-        param_file_paths = [
-            f
-            for f in all_files
-            if (f.endswith(".pt") or f.endswith(".pth")) and f.startswith("client_")
-        ]
+    # 仅保留存在于 models 目录下、尚未在 Redis 记录为“已聚合”的客户端模型
+    param_file_paths = [
+        f
+        for f in all_files
+        if (f.endswith(".pt") or f.endswith(".pth"))
+        and f.startswith("client_")
+        and f not in processed_set
+    ]
 
     # 如果不存在任何新的客户端模型，但已经有聚合好的全局模型，则无需再次聚合
     if not param_file_paths and os.path.exists(os.path.join(model_dir, "sentiment_zh_final.pt")):
@@ -338,4 +329,17 @@ if __name__ == "__main__":
         "total_weight": float(total_weight),
     }, save_path)
     print(f"聚合后的最终模型已保存至: {save_path} (total_weight={total_weight})")
+
+    # 聚合完成后，将本轮参与聚合的客户端模型名称写入 Redis，
+    # 作为“已聚合”记录，后续聚合会自动跳过这些模型文件。
+    if redis_client is not None and param_file_paths:
+        try:
+            redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:processed_models")
+            redis_client.sadd(redis_key, *param_file_paths)
+            print(
+                f"已将本轮聚合使用的客户端模型写入 Redis 集合 {redis_key}: {param_file_paths}",
+                flush=True,
+            )
+        except Exception as e:
+            print(f"将已聚合模型名称写入 Redis 失败: {e}", flush=True)
 

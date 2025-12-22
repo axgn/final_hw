@@ -25,18 +25,13 @@ stream_job_logs() {
 		return
 	fi
 
-	echo "找到 job/${job_name} 的 Pod: ${pod_name}，等待容器启动..."
-	# 再等待一段时间，直到 Pod 进入 Running/已启动状态，再开始跟踪日志
-	for i in {1..60}; do
-		phase=$(kubectl get pod "${pod_name}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
-		if [[ "${phase}" == "Running" || "${phase}" == "Succeeded" || "${phase}" == "Failed" ]]; then
-			break
-		fi
-		sleep 2
-	done
+	echo "找到 job/${job_name} 的 Pod: ${pod_name}，等待至少一个 Pod Ready 再开始日志跟踪..."
+	# 等待至少一个 Pod Ready，避免 ContainerCreating 阶段立刻报错
+	kubectl wait --for=condition=ready pod -n "${NAMESPACE}" -l job-name="${job_name}" --timeout=300s || true
 
-	echo "开始跟踪 job/${job_name} 的一个 Pod 日志: ${pod_name} (phase=${phase})"
-	kubectl logs -f "${pod_name}" -n "${NAMESPACE}" || true
+	echo "开始跟踪 job/${job_name} 的所有 Pod 日志 (label: job-name=${job_name})..."
+	# 使用 label 选择器跟踪整个 Job 下所有 Pod 的日志，直到 Job 结束
+	kubectl logs -f -n "${NAMESPACE}" -l job-name="${job_name}" --all-containers=true || true
 
 	echo "Pod 日志结束，继续等待 job/${job_name} 完成..."
 	kubectl wait --for=condition=complete --timeout=3600s "job/${job_name}" -n "${NAMESPACE}"

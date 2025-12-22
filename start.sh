@@ -5,22 +5,17 @@ set -euo pipefail
 ROOT_DIR="/root/final_hw"
 cd "${ROOT_DIR}" || exit 1
 
-echo "[1/7] 提交并等待联邦训练 Job 完成..."
-kubectl apply -f configs/train.yaml
-kubectl wait --for=condition=complete --timeout=600s job/train -n bloginfer
+echo "[1/6] 提交并等待联邦训练 Job 完成..."
+./train.sh 1
 
-echo "[2/7] 触发参数聚合 Job，并等待完成..."
-kubectl apply -f configs/Integrajob.yaml
-kubectl wait --for=condition=complete --timeout=600s job/model-aggregator -n bloginfer
-
-echo "[3/7] 重新构建后端 Docker和守护进程镜像 my_repository/blog-backend:latest和my_repository/train-daemon:latest..."
+echo "[2/6] 重新构建后端 Docker和守护进程镜像 my_repository/blog-backend:latest和my_repository/train-daemon:latest..."
 docker build -t my_repository/blog-backend:latest -f backend/Dockerfile backend
 docker build -t my_repository/train-daemon:latest -f daemon/Dockerfile daemon
 
-echo "[4/7] 构建前端并将 dist 复制到项目根目录..."
+echo "[3/6] 构建前端并将 dist 复制到项目根目录..."
 ./buildvue.sh
 
-echo "[5/7] 启动 Redis / MySQL / 推理服务 / 后端 / Nginx..."
+echo "[4/6] 启动 Redis / MySQL / 推理服务 / 后端 / Nginx..."
 kubectl delete configmap mysql-init -n bloginfer --ignore-not-found
 kubectl create configmap mysql-init --from-file=init.sql=configs/init.sql -n bloginfer
 
@@ -31,11 +26,11 @@ kubectl apply -f configs/inference.yaml
 kubectl apply -f configs/train-daemon.yaml
 kubectl apply -f configs/nginx.yaml
 
-echo "[6/7] 安装并配置 Prometheus + Grafana 监控栈..."
+echo "[5/6] 安装并配置 Prometheus + Grafana 监控栈..."
 ./prometheus_install.sh
 kubectl apply -f configs/monitor.yaml
 
-echo "[7/7] 为 Nginx 启用水平伸缩 HPA..."
+echo "[6/6] 为 Nginx 启用水平伸缩 HPA..."
 kubectl apply -f configs/nginx-hpa.yaml
 
 echo "全部模块已启动。当前 nginx Pod 数量持续监控中（Ctrl+C 退出监控）..."

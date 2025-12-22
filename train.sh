@@ -25,7 +25,17 @@ stream_job_logs() {
 		return
 	fi
 
-	echo "开始跟踪 job/${job_name} 的一个 Pod 日志: ${pod_name}"
+	echo "找到 job/${job_name} 的 Pod: ${pod_name}，等待容器启动..."
+	# 再等待一段时间，直到 Pod 进入 Running/已启动状态，再开始跟踪日志
+	for i in {1..60}; do
+		phase=$(kubectl get pod "${pod_name}" -n "${NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+		if [[ "${phase}" == "Running" || "${phase}" == "Succeeded" || "${phase}" == "Failed" ]]; then
+			break
+		fi
+		sleep 2
+	done
+
+	echo "开始跟踪 job/${job_name} 的一个 Pod 日志: ${pod_name} (phase=${phase})"
 	kubectl logs -f "${pod_name}" -n "${NAMESPACE}" || true
 
 	echo "Pod 日志结束，继续等待 job/${job_name} 完成..."

@@ -74,6 +74,24 @@
       "problemMatcher": []
     },
     {
+      "label": "rebuild Daemon Docker Image",
+      "type": "shell",
+      "command": "cd daemon && sudo nerdctl -n k8s.io rmi -f my_repository/train-daemon:latest && sudo nerdctl -n k8s.io build -t my_repository/train-daemon:latest .",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Restart Backend Module",
       "type": "shell",
       "command": "kubectl delete -f configs/blog.yaml && kubectl apply -f configs/blog.yaml",

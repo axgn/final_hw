@@ -28,6 +28,7 @@ kubectl apply -f configs/redis.yaml
 kubectl apply -f configs/blog.yaml
 kubectl apply -f configs/mysql.yaml
 kubectl apply -f configs/inference.yaml
+kubectl apply -f configs/train-daemon.yaml
 kubectl apply -f configs/nginx.yaml
 
 echo "[6/7] 安装并配置 Prometheus + Grafana 监控栈..."

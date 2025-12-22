@@ -90,23 +90,41 @@ class SimpleSentiment(nn.Module):
         x = x.mean(dim=1)        # mean pooling
         return torch.sigmoid(self.fc(x)).squeeze(1)
 
-def federated_average_aggregate(param_files, model_dir):
-    """对多个客户端的模型参数进行 FedAvg 聚合。
+def federated_average_aggregate(param_files, model_dir, base_params=None, base_vocab=None, base_weight: float = 0.0):
+    """对多个客户端的模型参数进行 FedAvg 聚合，并支持增量式更新。
 
-    支持两种保存格式：
+    - base_params/base_weight 来自上一次聚合得到的全局模型及其累计权重，
+      若提供，则本次会在此基础上继续累加新的客户端更新，而不是重新聚合所有历史客户端。
+
+    支持两种客户端保存格式：
     1) 直接保存 state_dict
-    2) 保存字典 {"model": state_dict, "vocab": vocab, ...}
+    2) 保存字典 {"model": state_dict, "vocab": vocab, "num_samples": int, ...}
     """
 
-    if not param_files:
-        print("错误：没有找到任何客户端模型文件。", flush=True)
-        return None, None
+    if not param_files and (base_params is None or base_weight <= 0.0):
+        print("错误：没有找到任何客户端模型文件，且不存在可用的全局模型。", flush=True)
+        return None, None, 0.0
 
-    print(f"找到 {len(param_files)} 个参数文件，开始进行 FedAvg 聚合...", flush=True)
+    print(f"找到 {len(param_files)} 个新增客户端参数文件，开始进行 FedAvg 聚合 (增量模式)...", flush=True)
 
     aggregated_params = None
-    shared_vocab = None
-    total_weight = 0.0
+    shared_vocab = base_vocab
+    total_weight = float(base_weight) if base_weight > 0 else 0.0
+
+    # 如果传入了上一轮聚合得到的全局模型及其累计权重，
+    # 则先将其作为初始值纳入本轮加权平均中。
+    if base_params is not None and base_weight > 0:
+        cleaned_base = {}
+        for key, tensor in base_params.items():
+            if not torch.is_tensor(tensor):
+                continue
+            if tensor.dtype in (torch.float32, torch.float64):
+                cleaned_base[key] = tensor.float()
+
+        if cleaned_base:
+            aggregated_params = {
+                k: v.clone() * base_weight for k, v in cleaned_base.items()
+            }
 
     for file_name in param_files:
         path = os.path.join(model_dir, file_name)
@@ -155,13 +173,13 @@ def federated_average_aggregate(param_files, model_dir):
 
     if aggregated_params is None or total_weight == 0.0:
         print("错误：未能从客户端模型中提取到可聚合参数。", flush=True)
-        return None, None
+        return None, None, 0.0
 
     for key in aggregated_params.keys():
         aggregated_params[key] = aggregated_params[key] / float(total_weight)
 
     print("参数聚合完成！", flush=True)
-    return aggregated_params, shared_vocab
+    return aggregated_params, shared_vocab, total_weight
 
 
 def build_test_loader(vocab):
@@ -206,23 +224,45 @@ if __name__ == "__main__":
     else:
         model_dir = "./models"
 
-    # 兼容 .pt / .pth 文件
+    # 兼容 .pt / .pth 文件，仅处理本次新产生的客户端模型文件
     all_files = os.listdir(model_dir) if os.path.isdir(model_dir) else []
     param_file_paths = [
         f for f in all_files
         if (f.endswith(".pt") or f.endswith(".pth")) and f.startswith("client_")
     ]
 
-    if not param_file_paths:
-        print("错误：未在 models 目录下找到任何以 client_ 开头的模型文件。", flush=True)
-    else:
-        # 执行聚合
-        final_aggregated_params, shared_vocab = federated_average_aggregate(
-            param_file_paths, model_dir
-        )
+    # 如果不存在任何新的客户端模型，但已经有聚合好的全局模型，则无需再次聚合
+    if not param_file_paths and os.path.exists(os.path.join(model_dir, "sentiment_zh_final.pt")):
+        print("未检测到新的客户端模型文件，且已存在聚合后的全局模型，跳过聚合。", flush=True)
+        exit(0)
 
-        if final_aggregated_params is None:
-            exit(1)
+    # 尝试加载上一轮聚合得到的全局模型及其累计权重，实现增量式更新
+    base_params = None
+    base_vocab = None
+    base_weight = 0.0
+    global_ckpt_path = os.path.join(model_dir, "sentiment_zh_final.pt")
+    if os.path.exists(global_ckpt_path):
+        try:
+            global_ckpt = torch.load(global_ckpt_path, map_location="cpu")
+            if isinstance(global_ckpt, dict) and "model" in global_ckpt:
+                base_params = global_ckpt["model"]
+                base_vocab = global_ckpt.get("vocab")
+                base_weight = float(global_ckpt.get("total_weight", 0.0) or 0.0)
+                print(f"已加载上一轮全局模型，累计权重 total_weight={base_weight}")
+        except Exception as e:
+            print(f"加载上一轮全局模型失败，将仅基于本轮客户端重新聚合: {e}")
+
+    if not param_file_paths and base_params is None:
+        print("错误：未在 models 目录下找到任何以 client_ 开头的模型文件，且无已有全局模型。", flush=True)
+        exit(1)
+
+    # 执行增量式聚合
+    final_aggregated_params, shared_vocab, total_weight = federated_average_aggregate(
+        param_file_paths, model_dir, base_params=base_params, base_vocab=base_vocab, base_weight=base_weight
+    )
+
+    if final_aggregated_params is None:
+        exit(1)
 
         # 如果客户端没有保存 vocab，则与 train.py 一样，用完整训练集重新构建
         if shared_vocab is None:
@@ -246,5 +286,17 @@ if __name__ == "__main__":
         save_dir = model_dir
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, "sentiment_zh_final.pt")
-        torch.save({"model": final_aggregated_params, "vocab": shared_vocab}, save_path)
-        print(f"聚合后的最终模型已保存至: {save_path}")
+        torch.save({
+            "model": final_aggregated_params,
+            "vocab": shared_vocab,
+            "total_weight": float(total_weight),
+        }, save_path)
+        print(f"聚合后的最终模型已保存至: {save_path} (total_weight={total_weight})")
+
+        # 聚合完成后，删除本轮已使用的客户端模型文件，避免下次重复聚合
+        for fname in param_file_paths:
+            try:
+                os.remove(os.path.join(model_dir, fname))
+                print(f"已删除客户端模型文件: {fname}")
+            except Exception as e:
+                print(f"删除客户端模型文件 {fname} 失败: {e}")

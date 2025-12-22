@@ -10,4 +10,4 @@ helm install monitor prometheus-community/kube-prometheus-stack \
   -n monitor --create-namespace
 
 helm upgrade monitor prometheus-community/kube-prometheus-stack \
-  -n monitor -f config_file/values.yaml
+  -n monitor -f configs/values.yaml

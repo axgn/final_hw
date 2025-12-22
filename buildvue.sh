@@ -1,4 +1,6 @@
-cd blog_website
+#!/usr/bin/env bash
+
+cd blog_website || exit 1
 npm run build
 if [ -d "../dist" ]; then
   rm -rf ../dist

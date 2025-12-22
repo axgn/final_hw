@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: train
+  namespace: bloginfer
+spec:
+  # 启动多个并行训练 Pod
+  completions: 2 # 期望总完成的训练任务数
+  parallelism: 2 # 同时并行运行的 Pod 数
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: train
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: train
+          image: pytorch/pytorch:2.9.0-cuda13.0-cudnn9-runtime
+          command: ["bash", "-c"]
+          args:
+            - |
+              cd /blog \
+              && pip install -r train/requirements.txt \
+              && python -u train/train.py
+          volumeMounts:
+            - name: blog-storage
+              mountPath: /blog
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+      volumes:
+        - name: blog-storage
+          persistentVolumeClaim:
+            claimName: blog-pvc

@@ -106,7 +106,7 @@ def federated_average_aggregate(param_files, model_dir):
 
     aggregated_params = None
     shared_vocab = None
-    num_clients = 0
+    total_weight = 0.0
 
     for file_name in param_files:
         path = os.path.join(model_dir, file_name)
@@ -119,8 +119,14 @@ def federated_average_aggregate(param_files, model_dir):
             client_params = ckpt["model"]
             if shared_vocab is None and "vocab" in ckpt:
                 shared_vocab = ckpt["vocab"]
+            # 使用每个客户端的样本数作为聚合权重，未提供时默认为 1
+            client_weight = float(ckpt.get("num_samples", 1.0))
         else:
             client_params = ckpt
+            client_weight = 1.0
+
+        if client_weight <= 0:
+            client_weight = 1.0
 
         # 预处理：统⼀转成 float，跳过不该聚合的 key
         cleaned_params = {}
@@ -133,21 +139,26 @@ def federated_average_aggregate(param_files, model_dir):
         if not cleaned_params:
             continue
 
+        # 按样本数加权累加参数，用于 FedAvg
         if aggregated_params is None:
-            aggregated_params = {k: v.clone() for k, v in cleaned_params.items()}
+            aggregated_params = {
+                k: v.clone() * client_weight for k, v in cleaned_params.items()
+            }
         else:
-            for key in aggregated_params.keys():
-                if key in cleaned_params:
-                    aggregated_params[key] += cleaned_params[key]
+            for key, tensor in cleaned_params.items():
+                if key in aggregated_params:
+                    aggregated_params[key] += tensor * client_weight
+                else:
+                    aggregated_params[key] = tensor.clone() * client_weight
 
-        num_clients += 1
+        total_weight += client_weight
 
-    if aggregated_params is None or num_clients == 0:
+    if aggregated_params is None or total_weight == 0.0:
         print("错误：未能从客户端模型中提取到可聚合参数。", flush=True)
         return None, None
 
     for key in aggregated_params.keys():
-        aggregated_params[key] = aggregated_params[key] / float(num_clients)
+        aggregated_params[key] = aggregated_params[key] / float(total_weight)
 
     print("参数聚合完成！", flush=True)
     return aggregated_params, shared_vocab

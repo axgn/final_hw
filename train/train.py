@@ -12,6 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from datasets import load_dataset
 import socket
+import os
 
 # =========================
 # 1. 中文分词
@@ -103,8 +104,23 @@ def main():
     print("train size:", len(train_texts))
     print("test size :", len(test_texts))
 
+    # 默认使用本轮重新构建的词表
     vocab = build_vocab(train_texts)
     print("vocab size:", len(vocab))
+
+    # 如果存在上一轮聚合得到的全局模型，则优先加载其 vocab 和参数，
+    # 这样本轮可以看作是在同一个全局模型基础上的本地更新，
+    # 参数平均在数学上等价于梯度平均。
+    global_ckpt_path = "models/sentiment_zh_final.pt"
+    global_ckpt = None
+    if os.path.exists(global_ckpt_path):
+        try:
+            global_ckpt = torch.load(global_ckpt_path, map_location="cpu")
+            if isinstance(global_ckpt, dict) and "vocab" in global_ckpt:
+                vocab = global_ckpt["vocab"]
+                print("loaded global vocab, size:", len(vocab))
+        except Exception as e:
+            print(f"failed to load global checkpoint: {e}")
 
     train_ds = SentimentDataset(train_texts, train_labels, vocab)
     test_ds = SentimentDataset(test_texts, test_labels, vocab)
@@ -126,6 +142,18 @@ def main():
     )
 
     model = SimpleSentiment(len(vocab))
+
+    # 如果加载到了全局模型参数，则从该参数继续训练
+    if global_ckpt is not None:
+        try:
+            if isinstance(global_ckpt, dict) and "model" in global_ckpt:
+                state = global_ckpt["model"]
+            else:
+                state = global_ckpt
+            model.load_state_dict(state, strict=False)
+            print("loaded global model state for continued training")
+        except Exception as e:
+            print(f"failed to load global model state: {e}")
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.BCELoss()
 
@@ -152,10 +180,12 @@ def main():
 
         print(f"epoch {epoch} test acc {(correct/total):.4f}")
 
+    # 额外保存本地使用的样本数，供聚合时做加权 FedAvg
     torch.save(
         {
             "model": model.state_dict(),
             "vocab": vocab,
+            "num_samples": len(train_texts),
         },
         f"models/client_{socket.gethostname()}.pt",
     )

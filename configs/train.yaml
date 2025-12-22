@@ -4,9 +4,8 @@ metadata:
   name: train
   namespace: bloginfer
 spec:
-  # 启动多个并行训练 Pod
-  completions: 2 # 期望总完成的训练任务数
-  parallelism: 2 # 同时并行运行的 Pod 数
+  completions: 2
+  parallelism: 2
   backoffLimit: 1
   template:
     metadata:

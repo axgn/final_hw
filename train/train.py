@@ -249,7 +249,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.BCELoss()
 
-    for epoch in range(5):
+    for epoch in range(1):
         model.train()
         total_loss = 0.0
         for x, y in train_loader:

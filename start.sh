@@ -6,9 +6,9 @@ ROOT_DIR="/root/final_hw"
 cd "${ROOT_DIR}" || exit 1
 
 echo "[1/6] 提交并等待联邦训练 Job 完成..."
-./train.sh 1
+./train.sh 5
 
-echo "[2/6] 重新构建后端 Docker和守护进程镜像 my_repository/blog-backend:latest和my_repository/train-daemon:latest..."
+echo "[2/6] 构建后端 Docker和守护进程镜像 my_repository/blog-backend:latest和my_repository/train-daemon:latest..."
 docker build -t my_repository/blog-backend:latest -f backend/Dockerfile backend
 docker build -t my_repository/train-daemon:latest -f daemon/Dockerfile daemon
 

@@ -292,8 +292,33 @@ def main():
 
     # 1. 训练完成后把模型名称写入 Redis，供聚合脚本读取
     try:
-        redis_host = os.getenv("REDIS_HOST", "redis")
-        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        # 兼容多种 Redis 环境变量格式：
+        # - REDIS_HOST / REDIS_PORT
+        # - REDIS_PORT=tcp://host:port
+        redis_host_env = os.getenv("REDIS_HOST")
+        redis_port_raw = os.getenv("REDIS_PORT")
+
+        redis_host = redis_host_env or "redis"
+        redis_port = 6379
+
+        if redis_port_raw:
+            try:
+                if redis_port_raw.startswith("tcp://"):
+                    addr = redis_port_raw[len("tcp://") :]
+                    if ":" in addr:
+                        host_part, port_part = addr.split(":", 1)
+                        if not redis_host_env:
+                            redis_host = host_part
+                        redis_port = int(port_part)
+                    else:
+                        redis_port = int(addr)
+                else:
+                    redis_port = int(redis_port_raw)
+            except ValueError:
+                print(
+                    f"invalid REDIS_PORT value: {redis_port_raw}, fallback to {redis_port}",
+                )
+
         redis_db = int(os.getenv("REDIS_DB", "0"))
         redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:pending_models")
 

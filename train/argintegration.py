@@ -221,8 +221,32 @@ if __name__ == "__main__":
     redis_client = None
     param_file_paths = []
     try:
-        redis_host = os.getenv("REDIS_HOST", "redis")
-        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        # 同样兼容 REDIS_PORT 为 tcp://host:port 的形式
+        redis_host_env = os.getenv("REDIS_HOST")
+        redis_port_raw = os.getenv("REDIS_PORT")
+
+        redis_host = redis_host_env or "redis"
+        redis_port = 6379
+
+        if redis_port_raw:
+            try:
+                if redis_port_raw.startswith("tcp://"):
+                    addr = redis_port_raw[len("tcp://") :]
+                    if ":" in addr:
+                        host_part, port_part = addr.split(":", 1)
+                        if not redis_host_env:
+                            redis_host = host_part
+                        redis_port = int(port_part)
+                    else:
+                        redis_port = int(addr)
+                else:
+                    redis_port = int(redis_port_raw)
+            except ValueError:
+                print(
+                    f"invalid REDIS_PORT value: {redis_port_raw}, fallback to {redis_port}",
+                    flush=True,
+                )
+
         redis_db = int(os.getenv("REDIS_DB", "0"))
         redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:pending_models")
 

@@ -58,7 +58,7 @@
     {
       "label": "rebuild Backend Docker Image",
       "type": "shell",
-      "command": "cd backend && sudo nerdctl -n k8s.io rmi -f my_repository/blog-backend:latest && sudo nerdctl -n k8s.io build -t my_repository/blog-backend:latest .",
+      "command": "cd backend && sudo nerdctl -n k8s.io rmi -f my_repository/blog-backend:latest ;sudo nerdctl -n k8s.io build -t my_repository/blog-backend:latest .",
       "group": {
         "kind": "build",
         "isDefault": false

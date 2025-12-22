@@ -19,6 +19,14 @@
         >
           视频
         </button>
+        <button
+          type="button"
+          class="app-nav-btn"
+          :class="{ active: activePage === 'metrics' }"
+          @click="activePage = 'metrics'"
+        >
+          监控
+        </button>
       </nav>
     </header>
 
@@ -64,9 +72,15 @@
       </section>
     </main>
 
-    <main v-else class="app-main single-column">
+    <main v-else-if="activePage === 'video'" class="app-main single-column">
       <section class="content">
         <VideoPlayer />
+      </section>
+    </main>
+
+    <main v-else class="app-main single-column">
+      <section class="content">
+        <MetricsDashboard />
       </section>
     </main>
   </div>
@@ -77,6 +91,7 @@ import { ref, computed } from 'vue'
 import MarkdownViewer from './components/MarkdownViewer.vue'
 import CommentsSection from './components/CommentsSection.vue'
 import VideoPlayer from './components/VideoPlayer.vue'
+import MetricsDashboard from './components/MetricsDashboard.vue'
 import posts from './posts'
 
 const currentSlug = ref(posts[0]?.slug || '')

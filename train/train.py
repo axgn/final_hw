@@ -13,6 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 import socket
 import os
+import pymysql
 
 # =========================
 # 1. 中文分词
@@ -90,6 +91,83 @@ class SimpleSentiment(nn.Module):
 
 
 # =========================
+# 5. 从数据库实时获取评论
+# =========================
+def load_comments_from_db(limit: int = 5000):
+    """从 MySQL 中实时拉取最新的评论内容，作为额外训练语料。
+
+    这里只拿文本本身，不依赖额外的标注字段；后续会用当前全局模型
+    对这些评论做一次预测，生成伪标签再参与训练。
+    """
+
+    host = os.getenv("MYSQL_HOST", "mysql")
+    user = os.getenv("MYSQL_USER", "root")
+    password = os.getenv("MYSQL_PASSWORD", "123456")
+    database = os.getenv("MYSQL_DB", "blog")
+
+    try:
+        conn = pymysql.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database,
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+    except Exception as e:
+        print(f"failed to connect mysql: {e}")
+        return []
+
+    comments = []
+    try:
+        with conn.cursor() as cursor:
+            sql = "SELECT content FROM comments ORDER BY created_at DESC LIMIT %s"
+            cursor.execute(sql, (limit,))
+            rows = cursor.fetchall()
+            for row in rows:
+                text = (row.get("content") or "").strip()
+                if text:
+                    comments.append(text)
+    except Exception as e:
+        print(f"failed to load comments from db: {e}")
+    finally:
+        conn.close()
+
+    print(f"loaded {len(comments)} comments from database")
+    return comments
+
+
+def pseudo_label_comments(texts, model, vocab, batch_size: int = 64):
+    """用当前全局模型对数据库中的评论做预测，生成伪标签。
+
+    返回与 texts 等长的标签列表（0/1）。若 texts 为空或模型为 None，则返回空列表。
+    """
+
+    if not texts or model is None:
+        return []
+
+    ds = SentimentDataset(texts, [0] * len(texts), vocab)
+    loader = DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=2,
+    )
+
+    model.eval()
+    all_labels = []
+    with torch.no_grad():
+        for x, _ in loader:
+            prob = model(x)
+            preds = (prob > 0.5).float()
+            all_labels.extend(preds.tolist())
+
+    # 将 float 转成 int，保证与原始监督数据标签格式一致
+    return [int(1 if p >= 0.5 else 0) for p in all_labels]
+
+
+# =========================
 # 5. 主流程
 # =========================
 def main():
@@ -108,7 +186,7 @@ def main():
     vocab = build_vocab(train_texts)
     print("vocab size:", len(vocab))
 
-    # 如果存在上一轮聚合得到的全局模型，则优先加载其 vocab 和参数，
+    # 如果存在上一轮聚合得到的全局模型，则优先加载其 vocab，
     # 这样本轮可以看作是在同一个全局模型基础上的本地更新，
     # 参数平均在数学上等价于梯度平均。
     global_ckpt_path = "models/sentiment_zh_final.pt"
@@ -122,16 +200,9 @@ def main():
         except Exception as e:
             print(f"failed to load global checkpoint: {e}")
 
+    # 先基于标注数据集构建 Dataset / DataLoader
     train_ds = SentimentDataset(train_texts, train_labels, vocab)
     test_ds = SentimentDataset(test_texts, test_labels, vocab)
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=64,
-        shuffle=True,
-        collate_fn=collate_fn,
-        num_workers=4,
-    )
 
     test_loader = DataLoader(
         test_ds,
@@ -154,6 +225,37 @@ def main():
             print("loaded global model state for continued training")
         except Exception as e:
             print(f"failed to load global model state: {e}")
+
+    # =========================
+    # 使用当前全局模型给数据库中的最新评论打伪标签，
+    # 将其实时作为额外训练数据纳入本轮训练。
+    # =========================
+    extra_texts = load_comments_from_db(limit=5000)
+    extra_labels = []
+    if extra_texts:
+        try:
+            extra_labels = pseudo_label_comments(extra_texts, model, vocab)
+            print(f"pseudo labeled {len(extra_labels)} comments from db")
+        except Exception as e:
+            print(f"failed to pseudo label comments: {e}")
+            extra_texts = []
+            extra_labels = []
+
+    if extra_texts and len(extra_texts) == len(extra_labels):
+        merged_texts = list(train_texts) + list(extra_texts)
+        merged_labels = list(train_labels) + list(extra_labels)
+        train_ds = SentimentDataset(merged_texts, merged_labels, vocab)
+        print(
+            f"total train samples: labeled={len(train_texts)}, from_db={len(extra_texts)}, total={len(merged_texts)}"
+        )
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=64,
+        shuffle=True,
+        collate_fn=collate_fn,
+        num_workers=4,
+    )
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.BCELoss()
 

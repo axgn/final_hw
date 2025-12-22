@@ -21,6 +21,20 @@ namespace
         }
         return oss.str();
     }
+
+    std::string generateSalt()
+    {
+        std::random_device rd;
+        std::mt19937_64 gen(rd());
+        std::uniform_int_distribution<unsigned long long> dis;
+
+        std::ostringstream oss;
+        for (int i = 0; i < 2; ++i)
+        {
+            oss << std::hex << std::setw(16) << std::setfill('0') << dis(gen);
+        }
+        return oss.str();
+    }
 }
 
 // 注册接口：POST /api/user/register
@@ -53,13 +67,14 @@ void UserCtrl::registerUser(const HttpRequestPtr &req, std::function<void(const 
     const auto username = json["username"].asString();
     const auto password = json["password"].asString();
     const auto email = json.isMember("email") ? json["email"].asString() : std::string();
+    const auto salt = generateSalt();
 
     auto client = app().getDbClient();
 
     // 先检查用户名是否已存在
     client->execSqlAsync(
         "SELECT id FROM users WHERE username = ?",
-        [callback, username, password, email, client](const drogon::orm::Result &r) {
+        [callback, username, password, email, client, salt](const drogon::orm::Result &r) {
             if (r.size() > 0)
             {
                 Json::Value body;
@@ -71,9 +86,9 @@ void UserCtrl::registerUser(const HttpRequestPtr &req, std::function<void(const 
                 return;
             }
 
-            // 不存在则插入新用户
+            // 不存在则插入新用户，使用 salt + SHA2 哈希保存密码
             client->execSqlAsync(
-                "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
+                "INSERT INTO users (username, password, salt, email) VALUES (?, SHA2(CONCAT(?, ?), 256), ?, ?)",
                 [callback, username, email](const drogon::orm::Result &) {
                     Json::Value data;
                     data["username"] = username;
@@ -115,6 +130,8 @@ void UserCtrl::registerUser(const HttpRequestPtr &req, std::function<void(const 
                 },
                 username,
                 password,
+                salt,
+                salt,
                 email);
         },
         [callback](const std::exception_ptr &eptr) {
@@ -175,8 +192,8 @@ void UserCtrl::login(const HttpRequestPtr &req, std::function<void(const HttpRes
 
     auto client = app().getDbClient();
     client->execSqlAsync(
-        "SELECT id, username, email, avatar_url, password FROM users WHERE username = ?",
-        [callback, username, password](const drogon::orm::Result &r) {
+        "SELECT id, username, email, avatar_url FROM users WHERE username = ? AND password = SHA2(CONCAT(?, salt), 256)",
+        [callback](const drogon::orm::Result &r) {
             if (r.size() == 0)
             {
                 Json::Value body;
@@ -189,17 +206,6 @@ void UserCtrl::login(const HttpRequestPtr &req, std::function<void(const HttpRes
             }
 
             const auto &row = r[0];
-            std::string dbPassword = row["password"].as<std::string>();
-            if (dbPassword != password)
-            {
-                Json::Value body;
-                body["code"] = 1;
-                body["message"] = "Invalid username or password";
-                auto resp = HttpResponse::newHttpJsonResponse(body);
-                resp->setStatusCode(k401Unauthorized);
-                callback(resp);
-                return;
-            }
 
             auto userId = row["id"].as<long long>();
 

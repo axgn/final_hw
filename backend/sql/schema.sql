@@ -1,13 +1,16 @@
 SET NAMES utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 CREATE DATABASE IF NOT EXISTS blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 USE blog;
 
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(64) NOT NULL UNIQUE,
     password VARCHAR(128) NOT NULL,
+    salt VARCHAR(64) NOT NULL,
     email VARCHAR(128),
     avatar_url VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -19,11 +22,7 @@ CREATE TABLE IF NOT EXISTS comments (
     user_id BIGINT NOT NULL,
     content TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_comments_user
-        FOREIGN KEY (user_id) REFERENCES users(id)
-        ON DELETE CASCADE
+    CONSTRAINT fk_comments_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
-
 
 SET FOREIGN_KEY_CHECKS = 1;

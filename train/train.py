@@ -14,6 +14,7 @@ from datasets import load_dataset
 import socket
 import os
 import pymysql
+import redis
 
 # =========================
 # 1. 中文分词
@@ -182,13 +183,9 @@ def main():
     print("train size:", len(train_texts))
     print("test size :", len(test_texts))
 
-    # 默认使用本轮重新构建的词表
     vocab = build_vocab(train_texts)
     print("vocab size:", len(vocab))
 
-    # 如果存在上一轮聚合得到的全局模型，则优先加载其 vocab，
-    # 这样本轮可以看作是在同一个全局模型基础上的本地更新，
-    # 参数平均在数学上等价于梯度平均。
     global_ckpt_path = "models/sentiment_zh_final.pt"
     global_ckpt = None
     if os.path.exists(global_ckpt_path):
@@ -200,7 +197,6 @@ def main():
         except Exception as e:
             print(f"failed to load global checkpoint: {e}")
 
-    # 先基于标注数据集构建 Dataset / DataLoader
     train_ds = SentimentDataset(train_texts, train_labels, vocab)
     test_ds = SentimentDataset(test_texts, test_labels, vocab)
 
@@ -214,7 +210,6 @@ def main():
 
     model = SimpleSentiment(len(vocab))
 
-    # 如果加载到了全局模型参数，则从该参数继续训练
     if global_ckpt is not None:
         try:
             if isinstance(global_ckpt, dict) and "model" in global_ckpt:
@@ -226,10 +221,6 @@ def main():
         except Exception as e:
             print(f"failed to load global model state: {e}")
 
-    # =========================
-    # 使用当前全局模型给数据库中的最新评论打伪标签，
-    # 将其实时作为额外训练数据纳入本轮训练。
-    # =========================
     extra_texts = load_comments_from_db(limit=5000)
     extra_labels = []
     if extra_texts:
@@ -283,16 +274,39 @@ def main():
         print(f"epoch {epoch} test acc {(correct/total):.4f}")
 
     # 额外保存本地使用的样本数，供聚合时做加权 FedAvg
+    client_ckpt_name = f"client_{socket.gethostname()}.pt"
+    save_dir = "models"
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, client_ckpt_name)
+
     torch.save(
         {
             "model": model.state_dict(),
             "vocab": vocab,
             "num_samples": len(train_texts),
         },
-        f"models/client_{socket.gethostname()}.pt",
+        save_path,
     )
 
-    print(f"模型已保存至 models/client_{socket.gethostname()}.pt")
+    print(f"模型已保存至 {save_path}")
+
+    # 1. 训练完成后把模型名称写入 Redis，供聚合脚本读取
+    try:
+        redis_host = os.getenv("REDIS_HOST", "redis")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        redis_db = int(os.getenv("REDIS_DB", "0"))
+        redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:pending_models")
+
+        r = redis.Redis(
+            host=redis_host,
+            port=redis_port,
+            db=redis_db,
+            decode_responses=True,
+        )
+        r.sadd(redis_key, client_ckpt_name)
+        print(f"已将模型名称 {client_ckpt_name} 写入 Redis 集合 {redis_key}")
+    except Exception as e:
+        print(f"写入 Redis 失败: {e}")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
+import redis
 
 
 # =========================
@@ -91,15 +92,6 @@ class SimpleSentiment(nn.Module):
         return torch.sigmoid(self.fc(x)).squeeze(1)
 
 def federated_average_aggregate(param_files, model_dir, base_params=None, base_vocab=None, base_weight: float = 0.0):
-    """对多个客户端的模型参数进行 FedAvg 聚合，并支持增量式更新。
-
-    - base_params/base_weight 来自上一次聚合得到的全局模型及其累计权重，
-      若提供，则本次会在此基础上继续累加新的客户端更新，而不是重新聚合所有历史客户端。
-
-    支持两种客户端保存格式：
-    1) 直接保存 state_dict
-    2) 保存字典 {"model": state_dict, "vocab": vocab, "num_samples": int, ...}
-    """
 
     if not param_files and (base_params is None or base_weight <= 0.0):
         print("错误：没有找到任何客户端模型文件，且不存在可用的全局模型。", flush=True)
@@ -223,13 +215,48 @@ if __name__ == "__main__":
         model_dir = "./models"
     else:
         model_dir = "./models"
-
-    # 兼容 .pt / .pth 文件，仅处理本次新产生的客户端模型文件
     all_files = os.listdir(model_dir) if os.path.isdir(model_dir) else []
-    param_file_paths = [
-        f for f in all_files
-        if (f.endswith(".pt") or f.endswith(".pth")) and f.startswith("client_")
-    ]
+
+    # 2. 优先从 Redis 中读取待聚合的客户端模型列表
+    redis_client = None
+    param_file_paths = []
+    try:
+        redis_host = os.getenv("REDIS_HOST", "redis")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        redis_db = int(os.getenv("REDIS_DB", "0"))
+        redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:pending_models")
+
+        redis_client = redis.Redis(
+            host=redis_host,
+            port=redis_port,
+            db=redis_db,
+            decode_responses=True,
+        )
+        pending = list(redis_client.smembers(redis_key))
+        print(f"从 Redis 读取到 {len(pending)} 个待聚合客户端模型: {pending}", flush=True)
+
+        # 仅保留存在于 models 目录下的、符合命名规则的文件
+        param_file_paths = [
+            f
+            for f in pending
+            if f in all_files
+            and (f.endswith(".pt") or f.endswith(".pth"))
+            and f.startswith("client_")
+        ]
+        missing = set(pending) - set(param_file_paths)
+        if missing:
+            print(f"警告：Redis 中的以下模型文件在磁盘上不存在，将被忽略: {list(missing)}", flush=True)
+    except Exception as e:
+        print(f"连接或读取 Redis 失败，将回退到目录扫描: {e}", flush=True)
+        redis_client = None
+
+    # 兼容旧逻辑：如果 Redis 中没有有效条目，则回退到扫描目录
+    if not param_file_paths:
+        param_file_paths = [
+            f
+            for f in all_files
+            if (f.endswith(".pt") or f.endswith(".pth")) and f.startswith("client_")
+        ]
 
     # 如果不存在任何新的客户端模型，但已经有聚合好的全局模型，则无需再次聚合
     if not param_file_paths and os.path.exists(os.path.join(model_dir, "sentiment_zh_final.pt")):
@@ -256,7 +283,6 @@ if __name__ == "__main__":
         print("错误：未在 models 目录下找到任何以 client_ 开头的模型文件，且无已有全局模型。", flush=True)
         exit(1)
 
-    # 执行增量式聚合
     final_aggregated_params, shared_vocab, total_weight = federated_average_aggregate(
         param_file_paths, model_dir, base_params=base_params, base_vocab=base_vocab, base_weight=base_weight
     )
@@ -264,39 +290,44 @@ if __name__ == "__main__":
     if final_aggregated_params is None:
         exit(1)
 
-        # 如果客户端没有保存 vocab，则与 train.py 一样，用完整训练集重新构建
-        if shared_vocab is None:
-            print("未从客户端模型中发现 vocab，使用完整训练集重新构建 vocab。", flush=True)
-            full_dataset = load_dataset("lansinuote/ChnSentiCorp")
-            train_texts = full_dataset["train"]["text"]
-            shared_vocab = build_vocab(train_texts)
+    if shared_vocab is None:
+        print("未从客户端模型中发现 vocab，使用完整训练集重新构建 vocab。", flush=True)
+        full_dataset = load_dataset("lansinuote/ChnSentiCorp")
+        train_texts = full_dataset["train"]["text"]
+        shared_vocab = build_vocab(train_texts)
 
-        # 根据 vocab 大小构建模型并加载聚合参数
-        global_model = SimpleSentiment(len(shared_vocab))
-        global_model.load_state_dict(final_aggregated_params)
-        print("聚合后的参数已成功加载到情感模型。", flush=True)
+    global_model = SimpleSentiment(len(shared_vocab))
+    global_model.load_state_dict(final_aggregated_params)
+    print("聚合后的参数已成功加载到情感模型。", flush=True)
 
-        # 在测试集上评估最终模型的性能
-        print("\n开始评估聚合后模型在 ChnSentiCorp 测试集上的性能...", flush=True)
-        test_loader = build_test_loader(shared_vocab)
-        accuracy = test_model(global_model, test_loader)
-        print(f"\n聚合后模型在测试集上的准确率为: {accuracy * 100:.2f}%", flush=True)
+    print("\n开始评估聚合后模型在 ChnSentiCorp 测试集上的性能...", flush=True)
+    test_loader = build_test_loader(shared_vocab)
+    accuracy = test_model(global_model, test_loader)
+    print(f"\n聚合后模型在测试集上的准确率为: {accuracy * 100:.2f}%", flush=True)
 
-        # 保存聚合后的最终模型（保持与 train.py 近似的保存方式）
-        save_dir = model_dir
-        os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, "sentiment_zh_final.pt")
-        torch.save({
-            "model": final_aggregated_params,
-            "vocab": shared_vocab,
-            "total_weight": float(total_weight),
-        }, save_path)
-        print(f"聚合后的最终模型已保存至: {save_path} (total_weight={total_weight})")
+    save_dir = model_dir
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, "sentiment_zh_final.pt")
+    torch.save({
+        "model": final_aggregated_params,
+        "vocab": shared_vocab,
+        "total_weight": float(total_weight),
+    }, save_path)
+    print(f"聚合后的最终模型已保存至: {save_path} (total_weight={total_weight})")
 
-        # 聚合完成后，删除本轮已使用的客户端模型文件，避免下次重复聚合
-        for fname in param_file_paths:
-            try:
-                os.remove(os.path.join(model_dir, fname))
-                print(f"已删除客户端模型文件: {fname}")
-            except Exception as e:
-                print(f"删除客户端模型文件 {fname} 失败: {e}")
+    # 3. 聚合完成后删除本轮使用过的客户端模型文件
+    for fname in param_file_paths:
+        try:
+            os.remove(os.path.join(model_dir, fname))
+            print(f"已删除客户端模型文件: {fname}")
+        except Exception as e:
+            print(f"删除客户端模型文件 {fname} 失败: {e}")
+
+    # 同步清理 Redis 中的记录
+    if redis_client is not None and param_file_paths:
+        try:
+            redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:pending_models")
+            redis_client.srem(redis_key, *param_file_paths)
+            print(f"已从 Redis 集合 {redis_key} 中移除已聚合的模型条目", flush=True)
+        except Exception as e:
+            print(f"从 Redis 中移除模型条目失败: {e}", flush=True)

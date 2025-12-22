@@ -339,19 +339,3 @@ if __name__ == "__main__":
     }, save_path)
     print(f"聚合后的最终模型已保存至: {save_path} (total_weight={total_weight})")
 
-    # 3. 聚合完成后删除本轮使用过的客户端模型文件
-    for fname in param_file_paths:
-        try:
-            os.remove(os.path.join(model_dir, fname))
-            print(f"已删除客户端模型文件: {fname}")
-        except Exception as e:
-            print(f"删除客户端模型文件 {fname} 失败: {e}")
-
-    # 同步清理 Redis 中的记录
-    if redis_client is not None and param_file_paths:
-        try:
-            redis_key = os.getenv("FEDAVG_REDIS_KEY", "fedavg:pending_models")
-            redis_client.srem(redis_key, *param_file_paths)
-            print(f"已从 Redis 集合 {redis_key} 中移除已聚合的模型条目", flush=True)
-        except Exception as e:
-            print(f"从 Redis 中移除模型条目失败: {e}", flush=True)

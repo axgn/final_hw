@@ -1,5 +1,6 @@
 #include "CommentCtrl.h"
 #include <drogon/drogon.h>
+#include <cstdlib>
 
 using namespace drogon;
 
@@ -79,6 +80,31 @@ void CommentCtrl::createComment(const HttpRequestPtr &req,
             auto resp = HttpResponse::newHttpJsonResponse(body);
             resp->setStatusCode(k200OK);
             callback(resp);
+
+            // 异步触发训练守护进程，不阻塞当前请求
+            try
+            {
+                const char *daemonUrlEnv = std::getenv("TRAIN_DAEMON_URL");
+                std::string daemonUrl = daemonUrlEnv ? daemonUrlEnv : "http://train-daemon-service:8000";
+
+                auto httpClient = drogon::HttpClient::newHttpClient(daemonUrl);
+                auto trainReq = drogon::HttpRequest::newHttpRequest();
+                trainReq->setMethod(drogon::Post);
+                trainReq->setPath("/train/trigger");
+
+                httpClient->sendRequest(
+                    trainReq,
+                    [](ReqResult result, const HttpResponsePtr &resp) {
+                        if (result != ReqResult::Ok)
+                        {
+                            LOG_WARN << "Failed to trigger train daemon: result=" << static_cast<int>(result);
+                        }
+                    });
+            }
+            catch (const std::exception &e)
+            {
+                LOG_WARN << "Exception while triggering train daemon: " << e.what();
+            }
         },
         [callback](const std::exception_ptr &eptr) {
             Json::Value body;

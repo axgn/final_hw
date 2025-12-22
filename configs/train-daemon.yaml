@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: train-daemon-sa
+  namespace: bloginfer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: train-daemon-role
+  namespace: bloginfer
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: train-daemon-rb
+  namespace: bloginfer
+subjects:
+  - kind: ServiceAccount
+    name: train-daemon-sa
+    namespace: bloginfer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: train-daemon-role
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: train-daemon
+  namespace: bloginfer
+  labels:
+    app: train-daemon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: train-daemon
+  template:
+    metadata:
+      labels:
+        app: train-daemon
+    spec:
+      serviceAccountName: train-daemon-sa
+      containers:
+        - name: train-daemon
+          image: my_repository/train-daemon:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NAMESPACE
+              value: "bloginfer"
+            - name: MODEL_DIR
+              value: "/blog/models"
+            - name: MIN_TRAIN_INTERVAL_SECONDS
+              value: "600"
+            - name: TRAIN_POLL_INTERVAL_SECONDS
+              value: "5"
+            - name: CLEAN_INTERVAL_SECONDS
+              value: "3600"
+            - name: MAX_CLIENT_MODEL_AGE_SECONDS
+              value: "86400"
+            - name: TRAIN_JOB_YAML
+              value: "/blog/configs/train.yaml"
+            - name: AGG_JOB_YAML
+              value: "/blog/configs/Integrajob.yaml"
+            - name: INFERENCE_DEPLOYMENT_NAME
+              value: "inference"
+            - name: PORT
+              value: "8000"
+          ports:
+            - containerPort: 8000
+              name: http
+          volumeMounts:
+            - name: blog-storage
+              mountPath: /blog
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+      volumes:
+        - name: blog-storage
+          persistentVolumeClaim:
+            claimName: blog-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: train-daemon-service
+  namespace: bloginfer
+  labels:
+    app: train-daemon
+spec:
+  selector:
+    app: train-daemon
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

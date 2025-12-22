@@ -13,8 +13,9 @@ echo "[2/7] 触发参数聚合 Job，并等待完成..."
 kubectl apply -f configs/Integrajob.yaml
 kubectl wait --for=condition=complete --timeout=600s job/model-aggregator -n bloginfer
 
-echo "[3/7] 重新构建后端 Docker 镜像 my_repository/blog-backend:latest..."
-./build_backend.sh || echo "build_backend.sh 未找到，跳过本地构建（请确保镜像已存在于镜像仓库）"
+echo "[3/7] 重新构建后端 Docker和守护进程镜像 my_repository/blog-backend:latest和my_repository/train-daemon:latest..."
+docker build -t my_repository/blog-backend:latest -f backend/Dockerfile backend
+docker build -t my_repository/train-daemon:latest -f daemon/Dockerfile daemon
 
 echo "[4/7] 构建前端并将 dist 复制到项目根目录..."
 ./buildvue.sh

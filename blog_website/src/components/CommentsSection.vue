@@ -275,6 +275,18 @@ async function handleSubmit() {
 
     const body = await resp.json().catch(() => ({ code: 1, message: '未知错误' }))
 
+    const isUnauthorized =
+      resp.status === 401 ||
+      (typeof body.message === 'string' && body.message.startsWith('Unauthorized'))
+
+    if (isUnauthorized) {
+      submitError.value = '登录已失效，请重新登录后再发表评论。'
+      setToken('')
+      syncAuthToken()
+      openAuthModal('login')
+      return
+    }
+
     if (!resp.ok || body.code !== 0) {
       const msg = body.message || `发表评论失败 (HTTP ${resp.status})`
       submitError.value = msg
@@ -315,7 +327,16 @@ async function handleDelete(id) {
 
     const body = await resp.json().catch(() => ({ code: 1, message: '未知错误' }))
 
-    if (resp.status === 404 || body.code === 1) {
+    const isUnauthorized =
+      resp.status === 401 ||
+      (typeof body.message === 'string' && body.message.startsWith('Unauthorized'))
+
+    if (isUnauthorized) {
+      submitError.value = '登录已失效，请重新登录后再删除评论。'
+      setToken('')
+      syncAuthToken()
+      openAuthModal('login')
+    } else if (resp.status === 404 || body.code === 1) {
       submitError.value = body.message || '评论不存在或无权限删除。'
     } else if (!resp.ok || body.code !== 0) {
       submitError.value = body.message || `删除失败 (HTTP ${resp.status})`

@@ -99,7 +99,6 @@ class PredictResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时执行
     app.state.infer = SentimentInferencer(
         ckpt_path="models/sentiment_zh_final.pt",
         device="cpu",

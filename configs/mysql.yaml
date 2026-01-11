@@ -5,7 +5,7 @@ metadata:
   namespace: bloginfer
 type: Opaque
 data:
-  MYSQL_ROOT_PASSWORD: MTIzNDU2 # 123456 base64
+  MYSQL_ROOT_PASSWORD: MTIzNDU2
 
 ---
 apiVersion: apps/v1

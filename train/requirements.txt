@@ -2,3 +2,4 @@ datasets
 jieba
 pymysql
 redis
+cryptography

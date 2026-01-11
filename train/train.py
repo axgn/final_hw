@@ -1,8 +1,3 @@
-# train_sentiment_zh_hf.py
-# 中文情感分析（真实数据集：ChnSentiCorp）
-# HuggingFace datasets + PyTorch + ONNX
-# CPU 友好 / 无 torchtext
-
 import jieba
 from collections import Counter
 
@@ -94,11 +89,6 @@ class SimpleSentiment(nn.Module):
 # 5. 从数据库实时获取评论
 # =========================
 def load_comments_from_db(limit: int = 5000):
-    """从 MySQL 中实时拉取最新的评论内容，作为额外训练语料。
-
-    这里只拿文本本身，不依赖额外的标注字段；后续会用当前全局模型
-    对这些评论做一次预测，生成伪标签再参与训练。
-    """
 
     host = os.getenv("MYSQL_HOST", "mysql")
     user = os.getenv("MYSQL_USER", "root")
@@ -272,7 +262,6 @@ def main():
 
         print(f"epoch {epoch} test acc {(correct/total):.4f}")
 
-    # 额外保存本地使用的样本数，供聚合时做加权 FedAvg
     client_ckpt_name = f"client_{socket.gethostname()}.pt"
     save_dir = "models"
     os.makedirs(save_dir, exist_ok=True)

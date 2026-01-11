@@ -17,7 +17,6 @@ spec:
     spec:
       containers:
         - name: blog-backend
-          # 请将下面的镜像名替换为你实际构建并推送的 Drogon 后端镜像
           image: my_repository/blog-backend:latest
           imagePullPolicy: IfNotPresent
           ports:

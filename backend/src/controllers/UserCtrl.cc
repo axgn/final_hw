@@ -271,7 +271,8 @@ void UserCtrl::login(const HttpRequestPtr &req, std::function<void(const HttpRes
             resp->setStatusCode(k500InternalServerError);
             callback(resp);
         },
-        username);
+        username,
+        password);
 }
 
 // 需要鉴权的接口：GET /api/user/profile

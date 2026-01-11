@@ -5,7 +5,8 @@ kubectl create configmap mysql-init --from-file=init.sql=configs/init.sql -n blo
 
 
 kubectl apply -f configs/redis.yaml
-kubectl apply -f configs/blog.yaml
 kubectl apply -f configs/mysql.yaml
 kubectl apply -f configs/inference.yaml
+kubectl apply -f configs/blog.yaml
+kubectl apply -f configs/train-daemon.yaml
 kubectl apply -f configs/nginx.yaml

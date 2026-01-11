@@ -51,9 +51,6 @@ for (( round=1; round<=ROUNDS; round++ )); do
 	kubectl apply -f configs/Integrajob.yaml
 	stream_job_logs "model-aggregator"
 
-	echo "正在重启 inference 部署以加载最新模型..."
-	kubectl rollout restart deployment/inference -n "$NAMESPACE"
-
 	echo "第 ${round} 轮训练与增量聚合已完成。"
 done
 

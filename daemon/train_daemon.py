@@ -50,17 +50,12 @@ def load_k8s_config() -> None:
         config.load_incluster_config()
         logging.info("Loaded in-cluster Kubernetes config")
     except config.config_exception.ConfigException:
-        # 方便本地调试
         config.load_kube_config()
         logging.info("Loaded local kubeconfig")
 
     _batch_v1 = client.BatchV1Api()
     _apps_v1 = client.AppsV1Api()
 
-
-# =========================
-# Job 辅助函数
-# =========================
 
 def _delete_job_if_exists(name: str) -> None:
     assert _batch_v1 is not None

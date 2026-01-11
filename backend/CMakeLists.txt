@@ -4,12 +4,10 @@ project(blog_backend CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Define DEBUG macro when building in Debug mode
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_definitions(DEBUG)
 endif()
 
-# Read MySQL and Redis IPs from environment and generate config.json
 set(MYSQL_IP $ENV{MYSQL_HOST})
 if(NOT MYSQL_IP)
     set(MYSQL_IP "mysql")
